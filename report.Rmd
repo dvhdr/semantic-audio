@@ -1,6 +1,8 @@
 ---
 title: "Sematic Audio Descriptor Analysis"
 output: html_document
+authour: Dave Hodder
+date: "2nd February 2019"
 knit: (function(inputFile, encoding) { 
           rmarkdown::render(inputFile,
                         encoding=encoding, 
@@ -182,11 +184,11 @@ tokenised <- allinfo %>%
 
 ```
 
-## Intro
-
 The Semantic Audio project attempts to understand the subjective terms people apply to different kinds of audio processing. <http://www.semanticaudio.co.uk>.
 
 Eg. is an EQ **warm** or **bright**?
+
+## Let's explore!
 
 I downloaded their data to investigate. There aren't that many rows, and the EQ dominates, as you can see below by the number of reports for each type. Is that because people really use EQ that much more than the other plug-ins? I don't know, because I haven't tried to cross-reference these data with anything else. But it's not a ridiculous assumption.
 
@@ -227,17 +229,20 @@ So we have a reasonable split of instruments and FX here, though guitar EQ domin
 
 ```{r}
 
-# total row count:
+# total comments before tokenising:
+nrow(allinfo)
+
+# total word count after tokenising:
 nrow(tokenised)
 
-# rows with 'instrument' set:
+# tokenised words with 'instrument' set:
 tokenised  %>% filter(instrument != "(Missing)") %>% nrow()
 
 ```
 
 # Words
 
-But which words do people use to describe the processing? Here's a list of the most popular words used. I've ignored words used less than eight times to keep the chart small enough, but still it's hard to read beacuse of the massive overuse of *warm* and *bright*.
+Which words do people use to describe effect processing? Here's a list of the most popular. I've ignored words used less than eight times to keep the chart small enough, but still it's hard to read beacuse of the massive overuse of *warm* and *bright*.
 
 Note that (as for the instruments) I've cleaned these words up a little. Anything beginning with a capital letter has been preprocessed for misspellings and stemming. For example, aggregating "crips", "crisp" and "crispy" to *Crisp*. If it begins with a lowercase letter, it's verbatim.
 
@@ -265,9 +270,9 @@ tokenised %>%
 
 As you can see, the words *warm* and *bright* are overused (mainly for EQing guitar, as we'll see later).
 
-# Compresssor words
+# Compressor words
 
-Despite my better judgement, I'm going to press on. Here's an attempt to look at how different words are used to describe compressor settings.
+Here's a look at how different words are used to describe compressor settings.
 
 ```{r, echo=FALSE}
 
@@ -311,7 +316,7 @@ tokenised %>%
 
 # The big ol' chart of everything
 
-I've tried to put it all together in one plot, grouping the most popular words for each of the most popular instruments, all coloured by the effect types used to achieve them. It's not beautiful, but it's kinda useful.
+I've tried to put it all together in one plot, grouping the most popular words for each of the most popular instruments, all coloured by the effect types used to achieve them. It's not beautiful, but it's kinda succinct. It only counts words that are used more than twice, again to keep the plots readable.
 
 ```{r, echo=FALSE, message=FALSE}
 
@@ -320,7 +325,7 @@ tokenised %>%
   filter(instrument != "(Missing)") %>%
   group_by(instrument) %>%
   count(word, source) %>%
-  filter(n > 1) %>%
+  filter(n > 2) %>%
   top_n(10) %>% 
   # plot it
   ggplot(aes(x=word, y=n, fill=source)) + 
@@ -335,7 +340,7 @@ tokenised %>%
 
 # Word clouds
 
-Because you gotta have word clouds, here's a cloud of the different terms people use for each type of effect. Note that I've dropped *warm* and *bright* so that the other words get a chance!
+Because you've got to have word clouds, here's a cloud of the different terms people use for each type of effect. Note that I've dropped *warm* and *bright* so that the other words get a look in!
 
 If you ask nicely, I'll pour you a glass of my signature "Creamy Crunch Fuzz Punch" :)
 
@@ -357,15 +362,17 @@ tokenised %>%
 
 # Conclusions
 
-So what can we conclude? We don't really have enough data to say much more than:
+So what can we conclude? We don't really have enough data be sure about anything apart from:
 
 1) Guitarists use EQ for *warmth* and *brightness*
 2) Drummers want *punch*, and use a mixture of compression and EQ to achieve it
+
+But at a pinch, I'd add:
+
 3) You're gonna want some reverb and EQ to add *air* to your vocals
 4) You might use a compressor for *fat* bass
-5) Oh yeah, and *death to acoustic*! :D
 
-I'd love to get about 10x more data and repeat this analysis. I've mailed this to the Semantic Audio folks, in the hope that the plugins are still gathering data!
+I'd love to get about 10x more data and repeat this analysis. If you're one of the Semantic Audio folks, keep up the good work, this stuff is fascinating! I hope the plug-ins are still gathering data.
 
 # Footnotes
 
