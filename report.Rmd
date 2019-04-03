@@ -199,7 +199,8 @@ tokenised %>%
   # finally, plot it
   ggplot(aes(x=source, y=n, fill=source)) + 
     geom_col(show.legend=FALSE) + 
-    ylab('Count')
+    ylab('Count') +
+    theme_classic()
 
 ```
 
@@ -221,7 +222,8 @@ tokenised %>%
     coord_flip() +
     xlab('') + 
     ylab('number of uses') + 
-    ggtitle('Effect processing by instrument')
+    ggtitle('Effect processing by instrument') +
+    theme_classic()
 
 ```
 
@@ -264,7 +266,8 @@ tokenised %>%
     coord_flip() +
     xlab('') + 
     ylab('number of uses') + 
-    ggtitle('Most popular words used to decribe effect processing')
+    ggtitle('Most popular words used to decribe effect processing') +
+    theme_classic()
 
 ```
 
@@ -289,7 +292,8 @@ tokenised %>%
     coord_flip() + 
     xlab('') + 
     ylab('number of uses') + 
-    ggtitle('Most popular words used to describe compressors')
+    ggtitle('Most popular words used to describe compressors') +
+    theme_classic()
 
 ```
 
@@ -310,7 +314,8 @@ tokenised %>%
     coord_flip() +
     xlab('') + 
     ylab('number of uses') + 
-    ggtitle('Words used to describe drum processing')
+    ggtitle('Words used to describe drum processing') +
+    theme_classic()
 
 ```
 
@@ -334,7 +339,11 @@ tokenised %>%
     xlab('') +
     ylab('') +
     ggtitle('Number of word uses, broken down by instrument and effect type') +
-    facet_wrap(~instrument, scale="free")
+    facet_wrap(~instrument, scale="free") +
+    theme_classic() +
+    theme(strip.placement = "outside",
+        strip.background = element_blank(),
+        panel.spacing.y = unit(2, "lines"))
 
 ```
 
