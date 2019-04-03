@@ -1,0 +1,369 @@
+---
+title: "Sematic Audio Descriptor Analysis"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+#################################################################################
+#
+# Apply some basic NLP to the Semantic Audio project's public data.
+#
+#################################################################################
+
+library(tidytext)
+library(tidyverse)
+library(wordcloud)
+library(reshape2)
+
+# read and preprocess data (columns hard coded as CSVs have no header row)
+eqinfo <- read_csv("SAFEEqualiserUserData.csv", col_names=F) %>%
+  mutate(word=str_to_lower(X2), genre=str_to_lower(X19), instrument=str_to_lower(X20)) %>% 
+  select(word, genre, instrument) %>%
+  mutate(source="EQ")
+
+compinfo <- read_csv("SAFECompressorUserData.csv", col_names=F) %>%
+  mutate(word=str_to_lower(X2), genre=str_to_lower(X12), instrument=str_to_lower(X13)) %>% 
+  select(word, genre, instrument) %>%
+  mutate(source="Compressor")
+
+distinfo <- read_csv("SAFEDistortionUserData.csv", col_names=F) %>%
+  mutate(word=str_to_lower(X2), genre=str_to_lower(X11), instrument=str_to_lower(X12)) %>% 
+  select(word, genre, instrument) %>%
+  mutate(source="Distortion")
+
+verbinfo <- read_csv("SAFEReverbUserData.csv", col_names=F) %>%
+  mutate(word=str_to_lower(X2), genre=str_to_lower(X15), instrument=str_to_lower(X16)) %>% 
+  select(word, genre, instrument) %>%
+  mutate(source="Reverb")
+
+# stick them all together
+allinfo <- rbind(eqinfo, compinfo, verbinfo, distinfo)
+
+# helper function to do naive word substitiuion (to get a usable number of instrument groups).
+squashInstruments <- function(words)
+{
+  f <- factor(words)
+  lev <- levels(f)
+  
+  lev[grepl('drum', lev)] <- "Drums"
+  lev[grepl('snar', lev)] <- "Drums"
+  lev[grepl('hat', lev)] <- "Drums"
+  lev[grepl('clap', lev)] <- "Drums"
+  lev[grepl('kick', lev)] <- "Drums"
+  lev[grepl('kcik', lev)] <- "Drums"
+  lev[grepl('kik', lev)] <- "Drums"
+  lev[grepl('kit', lev)] <- "Drums"
+  lev[grepl('overhead', lev)] <- "Drums"
+  lev[grepl('oh mono', lev)] <- "Drums"
+  lev[grepl('base', lev)] <- "Drums"
+  
+  lev[grepl('keyboard', lev)] <- "Keyboard"
+  lev[grepl('piano', lev)] <- "Keyboard"
+  lev[grepl('organ', lev)] <- "Keyboard"
+  lev[grepl('key', lev)] <- "Keyboard"
+  lev[grepl('synth', lev)] <- "Keyboard"
+  lev[grepl('cimbalom', lev)] <- "Keyboard"
+  lev[grepl('glocken', lev)] <- "Keyboard"
+  
+  lev[grepl('bass', lev)] <- "Bass"
+  
+  lev[grepl('guitar', lev)] <- "Guitar"
+  lev[grepl('string', lev)] <- "Guitar"
+  lev[grepl('acoustic', lev)] <- "Guitar"
+  lev[grepl('gtr', lev)] <- "Guitar"
+  lev[grepl('telecaster', lev)] <- "Guitar"
+  lev[grepl('electric', lev)] <- "Guitar"
+  lev[grepl('tanglewood', lev)] <- "Guitar"
+  lev[grepl('charango', lev)] <- "Guitar"
+  
+  lev[grepl('vocal', lev)] <- "Vocal"
+  lev[grepl('voice', lev)] <- "Vocal"
+  lev[grepl('vox', lev)] <- "Vocal"
+  lev[grepl('singing', lev)] <- "Vocal"
+  
+  lev[grepl('trumpet', lev)] <- "Brass"
+  lev[grepl('sax', lev)] <- "Brass"
+  lev[grepl('sav', lev)] <- "Brass"
+  
+  lev[grepl('master', lev)] <- "Master / Aux"
+  lev[grepl('main', lev)] <- "Master / Aux"
+  lev[grepl('mix', lev)] <- "Master / Aux"
+  lev[grepl('aux', lev)] <- "Master / Aux"
+  lev[grepl('bus', lev)] <- "Master / Aux"
+  
+  # these appear a lot, but I don't know what to do with them. Setting them to NA
+  # drops them from our analysis... not sure whether that's a good thing or not!
+  lev[grepl('metal', lev)] <- NA # eg. metal3
+  lev[grepl('jazz', lev)] <- NA  # eg. jazz5
+  
+  # finally, splat everything we haven't touched (ie. everything without a capital
+  # letter) into a new group called "Other".
+  lev[!str_detect(lev, "[A-Z]")] <- "Other"
+ 
+  levels(f) <- lev
+  return (f)
+}
+
+# some manual stemming for common terms used.
+squashDescriptions <- function(words)
+{
+  f <- factor(words)
+  lev <- levels(f)
+  
+  lev[grepl('bass', lev)] <- "Bass"
+  lev[grepl('warm', lev)] <- "Warm"
+  lev[grepl('bright', lev)] <- "Bright"
+  lev[grepl('dark', lev)] <- "Dark"
+  lev[grepl('punch', lev)] <- "Punch"
+  lev[grepl('crunch', lev)] <- "Crunch"
+  lev[grepl('crush', lev)] <- "Crush"
+  lev[grepl('thick', lev)] <- "Thick"
+  lev[grepl('fuzz', lev)] <- "Fuzz"
+  lev[grepl('thin', lev)] <- "Thin"
+  lev[grepl('smooth', lev)] <- "Smooth"
+  lev[grepl('clear', lev)] <- "Clear"
+  lev[grepl('air', lev)] <- "Air"
+  lev[grepl('boom', lev)] <- "Boom"
+  lev[grepl('squash', lev)] <- "Squash"
+  lev[grepl('tight', lev)] <- "Tight"
+  lev[grepl('echo', lev)] <- "Echo"
+  lev[grepl('hall', lev)] <- "Hall"
+  lev[grepl('distan', lev)] <- "Distant"
+  lev[grepl('room', lev)] <- "Room"
+  lev[grepl('massiv', lev)] <- "Massive"
+  lev[grepl('huge', lev)] <- "Huge"
+  lev[grepl('big', lev)] <- "Big"
+  lev[grepl('deep', lev)] <- "Deep"
+  lev[grepl('destroy', lev)] <- "Destroy"
+  lev[grepl('crisp', lev)] <- "Crisp"
+  lev[grepl('fizz', lev)] <- "Fizz"
+  lev[grepl('fat', lev)] <- "Fat"
+  lev[grepl('sharp', lev)] <- "Sharp"
+  lev[grepl('wide', lev)] <- "Wide"
+  lev[grepl('pop', lev)] <- "Pop"
+  lev[grepl('vocal', lev)] <- "Vocal"
+  lev[grepl('voice', lev)] <- "Vocal"
+  lev[grepl('vox', lev)] <- "Vocal"
+  lev[grepl('soft', lev)] <- "Soft"
+  lev[grepl('harsh', lev)] <- "Harsh"
+  lev[grepl('subtle', lev)] <- "Subtle"
+  lev[grepl('effective', lev)] <- "Effective"
+  
+  # as for the jazzX and metalX instruments, I don't kwow what to do with these,
+  # so I just drop them and shrug.
+  lev[grepl('sofa1', lev)] <- NA
+  lev[grepl('re27', lev)] <- NA
+  
+  levels(f) <- lev
+  return (f)
+}
+
+# now build tokens from all of our descriptions
+tokenised <- allinfo %>% 
+  # to tokenise on something else, just pick a different column (eg. genre)
+  rename(comments=word) %>%
+  unnest_tokens(word, comments) %>%
+  # get rid of common, unhelpful words?
+  anti_join(stop_words) %>%
+  # collapse related instruments into groups
+  mutate(instrument=squashInstruments(instrument)) %>%
+  # collapse related words (*after* tokenising)
+  mutate(word=squashDescriptions(word)) %>%
+  # treat them as factors
+  mutate(instrument=fct_explicit_na(instrument), word=fct_explicit_na(word)) %>%
+  # ignore test data (is this test data?)
+  filter(word != "test")
+
+```
+
+## Intro
+
+The Semantic Audio project attempts to understand the subjective terms people apply to different kinds of audio processing. <http://www.semanticaudio.co.uk>.
+
+Eg. is an EQ **warm** or **bright**?
+
+I downloaded their data to investigate. There aren't that many rows, and the EQ dominates, as you can see below by the number of reports for each type. Is that because people really use EQ that much more than the other plug-ins? I don't know, because I haven't tried to cross-reference these data with anything else. But it's not a ridiculous assumption.
+
+```{r echo=FALSE}
+
+tokenised %>%
+  count(source) %>%
+  # finally, plot it
+  ggplot(aes(x=source, y=n, fill=source)) + 
+    geom_col(show.legend=FALSE) + 
+    ylab('Count')
+
+```
+
+Interestingly, they have audio features for each row, which could in principle be useful to tag against words, as they do on their site (with mulitdimensional scaling). Here, I'm just going to explore the use of language, descriptions of effects and instruments.
+
+## Instruments
+
+Here are the instruments referred to in the dataset, broken down by effect processing type. Note that I've aggregated them by keyword search, so for example "guitar", "acoustic gutiar", and "tanglewood" are all grouped as "Guitar". This massively helps to get manageable data, at the expense of some detail.
+
+```{r, echo=FALSE}
+
+# look at instrument breakdown by effect type
+tokenised %>%
+  filter(instrument != "(Missing)") %>%
+  count(source, instrument) %>%
+  # finally, plot it
+  ggplot(aes(x=instrument, y=n, fill=source)) + 
+    geom_col() + 
+    coord_flip() +
+    xlab('') + 
+    ylab('number of uses') + 
+    ggtitle('Effect processing by instrument')
+
+```
+
+So we have a reasonable split of instruments and FX here, though guitar EQ dominates. Note that less than half of these data actually have an instrument label :(
+
+```{r}
+
+# total row count:
+nrow(tokenised)
+
+# rows with 'instrument' set:
+tokenised  %>% filter(instrument != "(Missing)") %>% nrow()
+
+```
+
+# Words
+
+But which words do people use to describe the processing? Here's a list of the most popular words used. I've ignored words used less than eight times to keep the chart small enough, but still it's hard to read beacuse of the massive overuse of *warm* and *bright*.
+
+Note that (as for the instruments) I've cleaned these words up a little. Anything beginning with a capital letter has been preprocessed for misspellings and stemming. For example, aggregating "crips", "crisp" and "crispy" to *Crisp*. If it begins with a lowercase letter, it's verbatim.
+
+```{r, echo=FALSE}
+
+# now let's do some plots!
+# First, look at overall word popularity
+tokenised %>%
+  filter(word != "(Missing)") %>%
+  count(word) %>%
+  # change this to look at less popular words
+  filter(n > 7) %>%
+  # sorting factors in plots is a pain, we need these two lines:
+  arrange(n) %>%
+  mutate(word=factor(word, levels=unique(word))) %>% 
+  # finally, plot it
+  ggplot(aes(x=word, y=n, fill=word)) + 
+    geom_col(show.legend=FALSE) + 
+    coord_flip() +
+    xlab('') + 
+    ylab('number of uses') + 
+    ggtitle('Most popular words used to decribe effect processing')
+
+```
+
+As you can see, the words *warm* and *bright* are overused (mainly for EQing guitar, as we'll see later).
+
+# Compresssor words
+
+Despite my better judgement, I'm going to press on. Here's an attempt to look at how different words are used to describe compressor settings.
+
+```{r, echo=FALSE}
+
+# how about all the words used to describe a particular effect?
+tokenised %>%
+  filter(source == "Compressor") %>%
+  count(word) %>%
+  filter(n > 3, word != "(Missing)") %>%
+  arrange(n) %>%
+  mutate(word=factor(word, levels=unique(word))) %>% 
+  # plot it
+  ggplot(aes(x=word, y=n, fill=word)) + 
+    geom_col(show.legend=FALSE) + 
+    coord_flip() + 
+    xlab('') + 
+    ylab('number of uses') + 
+    ggtitle('Most popular words used to describe compressors')
+
+```
+
+# Drum processing by effect type
+
+Here, we can see the effects people choose to get a particular qualitative sound from their drum processing. E.g. if it's *punch* you're after (and by these data, chances are it is!), use a compressor and an EQ. If you want *crisp* or *bright*, turn to the EQ. And obviously, for *room* sound you'll need a reverb.
+
+```{r, echo=FALSE}
+
+# now let's see per-instrument words, eg. to describe drum processing, by effect type
+tokenised %>%
+  filter(instrument == "Drums") %>%
+  count(source, word) %>%
+  filter(n > 1) %>%
+  # finally, plot it
+  ggplot(aes(x=word, y=n, fill=source)) + 
+    geom_col() + 
+    coord_flip() +
+    xlab('') + 
+    ylab('number of uses') + 
+    ggtitle('Words used to describe drum processing')
+
+```
+
+# The big ol' chart of everything
+
+I've tried to put it all together in one plot, grouping the most popular words for each of the most popular instruments, all coloured by the effect types used to achieve them. It's not beautiful, but it's kinda useful.
+
+```{r, echo=FALSE, message=FALSE}
+
+# this is the big ol' plot of everything
+tokenised %>%
+  filter(instrument != "(Missing)") %>%
+  group_by(instrument) %>%
+  count(word, source) %>%
+  filter(n > 1) %>%
+  top_n(10) %>% 
+  # plot it
+  ggplot(aes(x=word, y=n, fill=source)) + 
+    geom_col() + 
+    coord_flip() +
+    xlab('') +
+    ylab('') +
+    ggtitle('Number of word uses, broken down by instrument and effect type') +
+    facet_wrap(~instrument, scale="free")
+
+```
+
+# Word clouds
+
+Because you gotta have word clouds, here's a cloud of the different terms people use for each type of effect. Note that I've dropped *warm* and *bright* so that the other words get a chance!
+
+If you ask nicely, I'll pour you a glass of my signature "Creamy Crunch Fuzz Punch" :)
+
+```{r, echo=FALSE, warning=FALSE }
+
+# A nice  cloud (I had to drop Warm and Bright
+# because they are so massively overused!)
+tokenised %>% 
+  filter(word != "Warm", word != "Bright", word != "test") %>%
+  filter(word != "(Missing)") %>%
+  # count words by type
+  count(word, source) %>%
+  # create a table suitable for passing to the comparison plot
+  acast(word ~ source, value.var='n', fill=0) %>%
+  # plot it!
+  comparison.cloud(max.words=600, title.size=1)
+
+```
+
+# Conclusions
+
+So what can we conclude? We don't really have enough data to say much more than:
+
+1) Guitarists use EQ for *warmth* and *brightness*
+2) Drummers want *punch*, and use a mixture of compression and EQ to achieve it
+3) You're gonna want some reverb and EQ to add *air* to your vocals
+4) You might use a compressor for *fat* bass
+5) Oh yeah, and *death to acoustic*! :D
+
+I'd love to get about 10x more data and repeat this analysis. I've mailed this to the Semantic Audio folks, in the hope that the plugins are still gathering data!
+
+# Footnotes
+
+You may notice that sometimes the numbers don't add up. This is because often the "instrument" field is left blank, so when aggregating by instrument, words don't appear as often as they do in the absolute word breakdown. So be it.
+
